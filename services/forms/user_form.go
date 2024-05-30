@@ -340,6 +340,12 @@ type EditVariableForm struct {
 	Data string `binding:"Required;MaxSize(65535)"`
 }
 
+// WIP RequireAction create form
+type RequireActionForm struct {
+	RepoName     string `binding:"Required;MaxSize(255)"`
+	WorkflowName string `binding:"Required;MaxSize(255)"`
+}
+
 func (f *EditVariableForm) Validate(req *http.Request, errs binding.Errors) binding.Errors {
 	ctx := context.GetValidateContext(req)
 	return middleware.Validate(errs, ctx.Data, f, ctx.Locale)
