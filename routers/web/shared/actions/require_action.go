@@ -72,7 +72,7 @@ func CreateRequireAction(ctx *context.Context, orgID int64, redirectURL string) 
 }
 
 func DeleteRequireAction(ctx *context.Context, redirectURL string) {
-	id := ctx.ParamsInt64(":require_action_id")
+	id := ctx.PathParamInt64(":require_action_id")
 
 	if err := actions_service.DeleteRequireActionByID(ctx, id); err != nil {
 		log.Error("Delete RequireAction [%d] failed: %v", id, err)
