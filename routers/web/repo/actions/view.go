@@ -35,8 +35,8 @@ import (
 
 func View(ctx *context_module.Context) {
 	ctx.Data["PageIsActions"] = true
-	runIndex := ctx.ParamsInt64("run")
-	jobIndex := ctx.ParamsInt64("job")
+	runIndex := ctx.PathParamInt64("run")
+	jobIndex := ctx.PathParamInt64("job")
 	ctx.Data["RunIndex"] = runIndex
 	ctx.Data["JobIndex"] = jobIndex
 	ctx.Data["ActionsURL"] = ctx.Repo.RepoLink + "/actions"
@@ -130,8 +130,8 @@ type ViewStepLogLine struct {
 
 func ViewPost(ctx *context_module.Context) {
 	req := web.GetForm(ctx).(*ViewRequest)
-	runIndex := ctx.ParamsInt64("run")
-	jobIndex := ctx.ParamsInt64("job")
+	runIndex := ctx.PathParamInt64("run")
+	jobIndex := ctx.PathParamInt64("job")
 
 	current, jobs := getRunJobs(ctx, runIndex, jobIndex)
 	if ctx.Written() {
@@ -268,8 +268,8 @@ func ViewPost(ctx *context_module.Context) {
 // Rerun will rerun jobs in the given run
 // If jobIndexStr is a blank string, it means rerun all jobs
 func Rerun(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
-	jobIndexStr := ctx.Params("job")
+	runIndex := ctx.PathParamInt64("run")
+	jobIndexStr := ctx.PathParam("job")
 	var jobIndex int64
 	if jobIndexStr != "" {
 		jobIndex, _ = strconv.ParseInt(jobIndexStr, 10, 64)
@@ -358,8 +358,8 @@ func rerunJob(ctx *context_module.Context, job *actions_model.ActionRunJob, shou
 }
 
 func Logs(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
-	jobIndex := ctx.ParamsInt64("job")
+	runIndex := ctx.PathParamInt64("run")
+	jobIndex := ctx.PathParamInt64("job")
 
 	job, _ := getRunJobs(ctx, runIndex, jobIndex)
 	if ctx.Written() {
@@ -407,7 +407,7 @@ func Logs(ctx *context_module.Context) {
 }
 
 func Cancel(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
+	runIndex := ctx.PathParamInt64("run")
 
 	_, jobs := getRunJobs(ctx, runIndex, -1)
 	if ctx.Written() {
@@ -448,7 +448,7 @@ func Cancel(ctx *context_module.Context) {
 }
 
 func Approve(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
+	runIndex := ctx.PathParamInt64("run")
 
 	current, jobs := getRunJobs(ctx, runIndex, -1)
 	if ctx.Written() {
@@ -529,7 +529,7 @@ type ArtifactsViewItem struct {
 }
 
 func ArtifactsView(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
+	runIndex := ctx.PathParamInt64("run")
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
@@ -567,8 +567,8 @@ func ArtifactsDeleteView(ctx *context_module.Context) {
 		return
 	}
 
-	runIndex := ctx.ParamsInt64("run")
-	artifactName := ctx.Params("artifact_name")
+	runIndex := ctx.PathParamInt64("run")
+	artifactName := ctx.PathParam("artifact_name")
 
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
 	if err != nil {
@@ -585,8 +585,8 @@ func ArtifactsDeleteView(ctx *context_module.Context) {
 }
 
 func ArtifactsDownloadView(ctx *context_module.Context) {
-	runIndex := ctx.ParamsInt64("run")
-	artifactName := ctx.Params("artifact_name")
+	runIndex := ctx.PathParamInt64("run")
+	artifactName := ctx.PathParam("artifact_name")
 
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
 	if err != nil {
@@ -625,7 +625,7 @@ func ArtifactsDownloadView(ctx *context_module.Context) {
 	// The v4 backend enshures ContentEncoding is set to "application/zip", which is not the case for the old backend
 	if len(artifacts) == 1 && artifacts[0].ArtifactName+".zip" == artifacts[0].ArtifactPath && artifacts[0].ContentEncoding == "application/zip" {
 		art := artifacts[0]
-		if setting.Actions.ArtifactStorage.MinioConfig.ServeDirect {
+		if setting.Actions.ArtifactStorage.ServeDirect() {
 			u, err := storage.ActionsArtifacts.URL(art.StoragePath, art.ArtifactPath)
 			if u != nil && err == nil {
 				ctx.Redirect(u.String())
@@ -684,7 +684,15 @@ func EnableWorkflowFile(ctx *context_module.Context) {
 	disableOrEnableWorkflowFile(ctx, true)
 }
 
-func disableOrEnableWorkflowFile(ctx *context_module.Context, isEnable bool) {
+func EnableGlobalWorkflowFile(ctx *context_module.Context) {
+	disableOrEnableGlobalWorkflowFile(ctx, false)
+}
+
+func DisableGlobalWorkflowFile(ctx *context_module.Context) {
+	disableOrEnableGlobalWorkflowFile(ctx, true)
+}
+
+func disableOrEnable(ctx *context_module.Context, isEnable, isglobal bool) {
 	workflow := ctx.FormString("workflow")
 	if len(workflow) == 0 {
 		ctx.ServerError("workflow", nil)
@@ -694,10 +702,18 @@ func disableOrEnableWorkflowFile(ctx *context_module.Context, isEnable bool) {
 	cfgUnit := ctx.Repo.Repository.MustGetUnit(ctx, unit.TypeActions)
 	cfg := cfgUnit.ActionsConfig()
 
-	if isEnable {
-		cfg.EnableWorkflow(workflow)
+	if isglobal {
+		if isEnable {
+			cfg.DisableGlobalWorkflow(workflow)
+		} else {
+			cfg.EnableGlobalWorkflow(workflow)
+		}
 	} else {
-		cfg.DisableWorkflow(workflow)
+		if isEnable {
+			cfg.EnableWorkflow(workflow)
+		} else {
+			cfg.DisableWorkflow(workflow)
+		}
 	}
 
 	if err := repo_model.UpdateRepoUnit(ctx, cfgUnit); err != nil {
@@ -705,13 +721,29 @@ func disableOrEnableWorkflowFile(ctx *context_module.Context, isEnable bool) {
 		return
 	}
 
-	if isEnable {
-		ctx.Flash.Success(ctx.Tr("actions.workflow.enable_success", workflow))
+	if isglobal {
+		if isEnable {
+			ctx.Flash.Success(ctx.Tr("actions.workflow.global_disable_success", workflow))
+		} else {
+			ctx.Flash.Success(ctx.Tr("actions.workflow.global_enable_success", workflow))
+		}
 	} else {
-		ctx.Flash.Success(ctx.Tr("actions.workflow.disable_success", workflow))
+		if isEnable {
+			ctx.Flash.Success(ctx.Tr("actions.workflow.enable_success", workflow))
+		} else {
+			ctx.Flash.Success(ctx.Tr("actions.workflow.disable_success", workflow))
+		}
 	}
 
 	redirectURL := fmt.Sprintf("%s/actions?workflow=%s&actor=%s&status=%s", ctx.Repo.RepoLink, url.QueryEscape(workflow),
 		url.QueryEscape(ctx.FormString("actor")), url.QueryEscape(ctx.FormString("status")))
 	ctx.JSONRedirect(redirectURL)
+}
+
+func disableOrEnableWorkflowFile(ctx *context_module.Context, isEnable bool) {
+	disableOrEnable(ctx, isEnable, false)
+}
+
+func disableOrEnableGlobalWorkflowFile(ctx *context_module.Context, isEnable bool) {
+	disableOrEnable(ctx, isEnable, true)
 }

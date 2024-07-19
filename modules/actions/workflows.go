@@ -69,6 +69,14 @@ func ListWorkflows(commit *git.Commit) (git.Entries, error) {
 	return ret, nil
 }
 
+/*
+func ListGlobalWorkflows() (git.Entries, error) {
+	tree, err := global.SubTree(".gitea/workflows")
+	ret := make(git.Entries, 0, len(entries))
+	return ret, nil
+}
+*/
+
 func GetContentFromEntry(entry *git.TreeEntry) ([]byte, error) {
 	f, err := entry.Blob().DataAsync()
 	if err != nil {
@@ -95,6 +103,17 @@ func GetEventsFromContent(content []byte) ([]*jobparser.Event, error) {
 	return events, nil
 }
 
+func DetectGlobalWorkflows(
+	gitRepo *git.Repository,
+	commit *git.Commit,
+	triggedEvent webhook_module.HookEventType,
+	payload api.Payloader,
+	detectSchedule bool,
+	entries git.Entries,
+) ([]*DetectedWorkflow, []*DetectedWorkflow, error) {
+	return _DetectWorkflows(gitRepo, commit, triggedEvent, payload, detectSchedule, entries)
+}
+
 func DetectWorkflows(
 	gitRepo *git.Repository,
 	commit *git.Commit,
@@ -106,7 +125,17 @@ func DetectWorkflows(
 	if err != nil {
 		return nil, nil, err
 	}
+	return _DetectWorkflows(gitRepo, commit, triggedEvent, payload, detectSchedule, entries)
+}
 
+func _DetectWorkflows(
+	gitRepo *git.Repository,
+	commit *git.Commit,
+	triggedEvent webhook_module.HookEventType,
+	payload api.Payloader,
+	detectSchedule bool,
+	entries git.Entries,
+) ([]*DetectedWorkflow, []*DetectedWorkflow, error) {
 	workflows := make([]*DetectedWorkflow, 0, len(entries))
 	schedules := make([]*DetectedWorkflow, 0, len(entries))
 	for _, entry := range entries {
@@ -146,12 +175,19 @@ func DetectWorkflows(
 	return workflows, schedules, nil
 }
 
+func DetectScheduledGlobalWorkflows(gitRepo *git.Repository, commit *git.Commit, entries git.Entries) ([]*DetectedWorkflow, error) {
+	return _DetectScheduledWorkflows(gitRepo, commit, entries)
+}
+
 func DetectScheduledWorkflows(gitRepo *git.Repository, commit *git.Commit) ([]*DetectedWorkflow, error) {
 	entries, err := ListWorkflows(commit)
 	if err != nil {
 		return nil, err
 	}
+	return _DetectScheduledWorkflows(gitRepo, commit, entries)
+}
 
+func _DetectScheduledWorkflows(gitRepo *git.Repository, commit *git.Commit, entries git.Entries) ([]*DetectedWorkflow, error) {
 	wfs := make([]*DetectedWorkflow, 0, len(entries))
 	for _, entry := range entries {
 		content, err := GetContentFromEntry(entry)

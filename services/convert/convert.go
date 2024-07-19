@@ -136,6 +136,7 @@ func ToBranchProtection(ctx context.Context, bp *git_model.ProtectedBranch, repo
 	}
 
 	pushWhitelistUsernames := getWhitelistEntities(readers, bp.WhitelistUserIDs)
+	forcePushAllowlistUsernames := getWhitelistEntities(readers, bp.ForcePushAllowlistUserIDs)
 	mergeWhitelistUsernames := getWhitelistEntities(readers, bp.MergeWhitelistUserIDs)
 	approvalsWhitelistUsernames := getWhitelistEntities(readers, bp.ApprovalsWhitelistUserIDs)
 
@@ -145,6 +146,7 @@ func ToBranchProtection(ctx context.Context, bp *git_model.ProtectedBranch, repo
 	}
 
 	pushWhitelistTeams := getWhitelistEntities(teamReaders, bp.WhitelistTeamIDs)
+	forcePushAllowlistTeams := getWhitelistEntities(teamReaders, bp.ForcePushAllowlistTeamIDs)
 	mergeWhitelistTeams := getWhitelistEntities(teamReaders, bp.MergeWhitelistTeamIDs)
 	approvalsWhitelistTeams := getWhitelistEntities(teamReaders, bp.ApprovalsWhitelistTeamIDs)
 
@@ -161,6 +163,11 @@ func ToBranchProtection(ctx context.Context, bp *git_model.ProtectedBranch, repo
 		PushWhitelistUsernames:        pushWhitelistUsernames,
 		PushWhitelistTeams:            pushWhitelistTeams,
 		PushWhitelistDeployKeys:       bp.WhitelistDeployKeys,
+		EnableForcePush:               bp.CanForcePush,
+		EnableForcePushAllowlist:      bp.EnableForcePushAllowlist,
+		ForcePushAllowlistUsernames:   forcePushAllowlistUsernames,
+		ForcePushAllowlistTeams:       forcePushAllowlistTeams,
+		ForcePushAllowlistDeployKeys:  bp.ForcePushAllowlistDeployKeys,
 		EnableMergeWhitelist:          bp.EnableMergeWhitelist,
 		MergeWhitelistUsernames:       mergeWhitelistUsernames,
 		MergeWhitelistTeams:           mergeWhitelistTeams,
@@ -405,6 +412,32 @@ func ToAnnotatedTagObject(repo *repo_model.Repository, commit *git.Commit) *api.
 		SHA:  commit.ID.String(),
 		Type: string(git.ObjectCommit),
 		URL:  util.URLJoin(repo.APIURL(), "git/commits", commit.ID.String()),
+	}
+}
+
+// ToTagProtection convert a git.ProtectedTag to an api.TagProtection
+func ToTagProtection(ctx context.Context, pt *git_model.ProtectedTag, repo *repo_model.Repository) *api.TagProtection {
+	readers, err := access_model.GetRepoReaders(ctx, repo)
+	if err != nil {
+		log.Error("GetRepoReaders: %v", err)
+	}
+
+	whitelistUsernames := getWhitelistEntities(readers, pt.AllowlistUserIDs)
+
+	teamReaders, err := organization.OrgFromUser(repo.Owner).TeamsWithAccessToRepo(ctx, repo.ID, perm.AccessModeRead)
+	if err != nil {
+		log.Error("Repo.Owner.TeamsWithAccessToRepo: %v", err)
+	}
+
+	whitelistTeams := getWhitelistEntities(teamReaders, pt.AllowlistTeamIDs)
+
+	return &api.TagProtection{
+		ID:                 pt.ID,
+		NamePattern:        pt.NamePattern,
+		WhitelistUsernames: whitelistUsernames,
+		WhitelistTeams:     whitelistTeams,
+		Created:            pt.CreatedUnix.AsTime(),
+		Updated:            pt.UpdatedUnix.AsTime(),
 	}
 }
 
