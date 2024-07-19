@@ -73,6 +73,7 @@ import {initCommonIssueListQuickGoto} from './features/common-issue-list.ts';
 import {initRepoContributors} from './features/contributors.ts';
 import {initRepoCodeFrequency} from './features/code-frequency.ts';
 import {initRepoRecentCommits} from './features/recent-commits.ts';
+import {initRequireActionsSelect} from './features/require-actions-select.js';
 import {initRepoDiffCommitBranchesAndTags} from './features/repo-diff-commit.ts';
 import {initDirAuto} from './modules/dirauto.ts';
 import {initRepositorySearch} from './features/repo-search.ts';
@@ -214,7 +215,6 @@ onDomReady(() => {
     initRepoCodeFrequency,
     initRepoRecentCommits,
     initRequireActionsSelect,
-
     initCommitStatuses,
     initCaptcha,
 
